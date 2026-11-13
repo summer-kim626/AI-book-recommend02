@@ -116,6 +116,7 @@ textarea { width: 100%; font: inherit; font-size: 16px; color: var(--ink); backg
 .cfg .row { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
 .cfg label { font-size: 13px; color: var(--muted); font-weight: 700; }
 .cfg input[type="password"], .cfg input[type="text"] { width: 100%; }
+.cfg input[type="password"], .cfg select { font: inherit; font-size: 16px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 11px 14px; width: 100%; }
 .cfg .chk { display: flex; gap: 8px; align-items: center; margin-top: 10px; font-size: 13px; color: var(--muted); }
 .cfg .warn { margin: 10px 0 0; font-size: 12.5px; color: var(--warn-ink); background: var(--warn-bg); border-radius: 6px; padding: 8px 10px; }
 </style>
@@ -162,8 +163,14 @@ textarea { width: 100%; font: inherit; font-size: 16px; color: var(--ink); backg
         <input type="password" id="k-key" autocomplete="off" spellcheck="false" placeholder="AIza...">
       </div>
       <div class="row">
-        <label for="k-model">모델 이름</label>
-        <input type="text" id="k-model" autocomplete="off" spellcheck="false">
+        <label for="k-model">모델</label>
+        <select id="k-model">
+          <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite (기본 · 가장 빠름)</option>
+          <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite (빠름)</option>
+          <option value="gemini-3.6-flash">Gemini 3.6 Flash (보통)</option>
+          <option value="gemini-3.5-flash">Gemini 3.5 Flash (느림)</option>
+          <option value="gemini-3.8-flash">Gemini 3.8 Flash (최신 · 무료 키에서 응답이 늦을 수 있음)</option>
+        </select>
       </div>
       <label class="chk"><input type="checkbox" id="k-save"> 이 브라우저에 키 저장 (공용 컴퓨터에서는 끄세요)</label>
       <p class="warn">키는 이 페이지를 연 브라우저에서 Google Gemini API로 직접 전송됩니다. 다른 서버로 보내지 않습니다. 키가 코드에 들어가 있는 파일은 공개하지 마세요.</p>
@@ -484,12 +491,17 @@ var aiIn = document.getElementById("q2");
    방법 B: EMBEDDED_KEY에 키를 넣어 배포한다. 방문자는 키 입력 없이 쓰지만,
            페이지 소스를 보면 누구나 키를 볼 수 있다. 개인 확인용 파일로만 쓰고 공개하지 않는다. */
 var EMBEDDED_KEY = "";
-/* Gemini API 무료 등급에서 쓸 수 있는 Flash 모델. 무료 키는 https://aistudio.google.com/apikey 에서 발급 */
-var DEFAULT_MODEL = "gemini-3.8-flash";
+/* Gemini API 무료 등급 모델. 무료 키는 https://aistudio.google.com/apikey 에서 발급.
+   gemini-3.8-flash는 무료 키에서 응답이 멈추는 경우가 있어, 빠르게 응답하는 Flash-Lite를 기본으로 둔다.
+   선택지는 HTML의 #k-model 드롭다운에서 고친다. */
+var DEFAULT_MODEL = "gemini-3.5-flash-lite";
+/* 이 시간 안에 응답이 없으면 요청을 끊고 안내한다 (무한 로딩 방지) */
+var TIMEOUT_MS = 40000;
 var API_BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
 /* 저장 키 이름을 바꿔, 예전에 저장된 Anthropic 키·모델 이름이 섞이지 않게 한다 */
 var KEY_STORE = "ms_gemini_key";
-var MODEL_STORE = "ms_gemini_model";
+/* 이전 버전은 기본값(gemini-3.8-flash)을 자동 저장했으므로, 이름을 바꿔 새 기본값부터 다시 시작한다 */
+var MODEL_STORE = "ms_gemini_model_v2";
 
 var kKey = document.getElementById("k-key");
 var kModel = document.getElementById("k-model");
@@ -501,6 +513,8 @@ function store(op, k, v) {
   try { return op === "get" ? localStorage.getItem(k) : op === "set" ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch (e) { return null; }
 }
 kModel.value = store("get", MODEL_STORE) || DEFAULT_MODEL;
+/* 저장된 모델이 드롭다운에 없으면(예전 버전에서 저장한 값 등) 기본 모델로 되돌린다 */
+if (!kModel.value) kModel.value = DEFAULT_MODEL;
 (function () {
   var saved = store("get", KEY_STORE);
   if (saved) { kKey.value = saved; kSave.checked = true; }
@@ -587,9 +601,13 @@ async function askAI(text, pick) {
   if (!key) { var e0 = new Error("nokey"); e0.code = "no_key"; throw e0; }
   var model = (kModel.value.trim() || DEFAULT_MODEL);
   var res;
+  var ac = new AbortController();
+  var timer = setTimeout(function () { ac.abort(); }, TIMEOUT_MS);
+  function fail(code) { clearTimeout(timer); var ef = new Error(code); ef.code = ac.signal.aborted ? "timeout" : code; return ef; }
   try {
     res = await fetch(API_BASE + encodeURIComponent(model) + ":generateContent", {
       method: "POST",
+      signal: ac.signal,
       headers: {
         "content-type": "application/json",
         "x-goog-api-key": key
@@ -599,17 +617,17 @@ async function askAI(text, pick) {
         generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192 }
       })
     });
-  } catch (e1) { var en = new Error("net"); en.code = "network"; throw en; }
+  } catch (e1) { throw fail("network"); }
   if (!res.ok) {
     var body = "";
     try { body = await res.text(); } catch (e3) {}
-    var er = new Error("api");
     /* Gemini는 잘못된 키에 400(API_KEY_INVALID)을 돌려준다 */
     var badKey = res.status === 401 || res.status === 403 || (res.status === 400 && /API_KEY_INVALID|API key not valid/i.test(body));
-    er.code = badKey ? "bad_key" : res.status === 404 ? "bad_model" : res.status === 429 ? "rate_limited" : res.status >= 500 ? "overloaded" : "upstream";
-    throw er;
+    throw fail(badKey ? "bad_key" : res.status === 404 ? "bad_model" : res.status === 429 ? "rate_limited" : res.status >= 500 ? "overloaded" : "upstream");
   }
-  var j = await res.json();
+  var j;
+  try { j = await res.json(); } catch (e4) { throw fail("parse"); }
+  clearTimeout(timer);
   var parts = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || [];
   var t = parts.filter(function (p) { return !p.thought; }).map(function (p) { return p.text || ""; }).join("");
   var m = /\{[\s\S]*\}/.exec(t);
@@ -766,13 +784,14 @@ async function runAI(raw, pick) {
     var msgs = {
       no_key: "API 키를 먼저 'AI 설정'에 넣어 주세요.",
       bad_key: "API 키가 올바르지 않거나 권한이 없습니다. 키를 다시 확인해 주세요.",
-      bad_model: "모델 이름을 찾을 수 없습니다. 'AI 설정'의 모델 이름을 확인해 주세요.",
+      bad_model: "이 모델을 지금 쓸 수 없습니다. 'AI 설정'에서 다른 모델을 골라 주세요.",
+      timeout: "응답이 너무 오래 걸려 요청을 멈췄습니다. 'AI 설정'에서 더 빠른 모델을 골라 다시 시도해 주세요.",
       rate_limited: "요청이 많습니다. 잠시 뒤 다시 시도해 주세요.",
       overloaded: "AI 서버가 바쁩니다. 잠시 뒤 다시 시도해 주세요.",
       network: UNAVAILABLE
     };
     setStatus(msgs[code] || "AI 응답을 처리하지 못했습니다. 다시 시도해 주세요.");
-    if (code === "no_key" || code === "bad_key") { cfgBox.open = true; }
+    if (code === "no_key" || code === "bad_key" || code === "bad_model" || code === "timeout") { cfgBox.open = true; }
   } finally {
     aiBtn.disabled = false;
   }
