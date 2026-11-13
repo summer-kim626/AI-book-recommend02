@@ -75,11 +75,23 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); font-we
     <p class="lead">여기서 저장한 설정은 마음 서가 AI 추천을 쓰는 모든 방문자에게 적용됩니다.</p>
   </header>
 
-  <!-- 임시: 로그인 없이 누구나 이 페이지에서 저장할 수 있다. 구글 로그인 인증은 Firebase 설정을 마친 뒤 다시 붙인다. -->
-  <p class="msg warn">지금은 로그인 없이 동작하는 임시 버전입니다. 이 주소를 아는 사람은 누구나 설정을 바꿀 수 있으니 주소를 공유하지 마세요.</p>
+  <!-- 로그인 전: 허용된 구글 계정만 아래 설정 화면을 볼 수 있다.
+       화면을 숨기는 것은 편의일 뿐이고, 실제 저장 권한은 Firestore 보안 규칙이 관리자 계정인지 확인해 지킨다. -->
+  <section class="card" id="login-card">
+    <h2>관리자 로그인</h2>
+    <p class="help">허용된 구글 계정으로만 들어올 수 있습니다.</p>
+    <div><button class="primary" id="login">Google 계정으로 로그인</button></div>
+    <p class="msg" id="login-msg" role="alert"></p>
+  </section>
 
-  <div id="panel">
-    <section class="card">
+  <!-- 로그인 후 -->
+  <div id="panel" hidden>
+    <div class="bar">
+      <span class="who" id="who"></span>
+      <button id="logout">로그아웃</button>
+    </div>
+
+    <section class="card" style="margin-top:16px">
       <h2>AI API 키</h2>
       <div class="row">
         <label for="api-key">Gemini API 키 (<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">무료 발급</a>)</label>
@@ -130,15 +142,20 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); font-we
 <script src="site-config.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const S = window.MS_SITE;
 const app = initializeApp(S.firebase);
+const auth = getAuth(app);
 const db = S.databaseId ? getFirestore(app, S.databaseId) : getFirestore(app);
+const provider = new GoogleAuthProvider();
+provider.setCustomParameters({ prompt: "select_account" });
 const [col, id] = S.configDoc.split("/");
 const ref = doc(db, col, id);
 
 const $ = (i) => document.getElementById(i);
+const loginCard = $("login-card"), panel = $("panel");
 const keyIn = $("api-key"), modelSel = $("model"), guideIn = $("guidelines");
 
 function setMsg(el, text, kind) { el.textContent = text || ""; el.className = "msg" + (kind ? " " + kind : ""); }
@@ -146,12 +163,45 @@ function setMsg(el, text, kind) { el.textContent = text || ""; el.className = "m
 S.models.forEach((m) => { const o = document.createElement("option"); o.value = m.id; o.textContent = m.label; modelSel.appendChild(o); });
 $("fixed").textContent = "(사전 힌트가 있으면 여기 추가)\n" + S.fixedFormat + "\n<입력>사용자 문장</입력>";
 
-loadConfig();
+/* ----- 로그인 ----- */
+function isAdmin(user) {
+  return !!user && user.emailVerified && S.adminEmails.map((e) => e.toLowerCase()).includes(String(user.email).toLowerCase());
+}
+
+$("login").addEventListener("click", async () => {
+  setMsg($("login-msg"), "");
+  try { await signInWithPopup(auth, provider); }
+  catch (e) {
+    if (e.code === "auth/popup-blocked") { await signInWithRedirect(auth, provider); return; }
+    if (e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request") return;
+    if (e.code === "auth/unauthorized-domain") { setMsg($("login-msg"), "이 주소(" + location.hostname + ")는 Firebase 로그인 허용 도메인에 없습니다. Firebase 콘솔 → Authentication → 설정 → 승인된 도메인에 추가하세요.", "err"); return; }
+    setMsg($("login-msg"), "로그인하지 못했습니다. (" + e.code + ")", "err");
+  }
+});
+$("logout").addEventListener("click", () => signOut(auth));
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { panel.hidden = true; loginCard.hidden = false; return; }
+  if (!isAdmin(user)) {
+    setMsg($("login-msg"), user.email + " 계정은 관리자 권한이 없습니다. 허용된 계정으로 다시 로그인하세요.", "err");
+    await signOut(auth);
+    return;
+  }
+  setMsg($("login-msg"), "");
+  loginCard.hidden = true; panel.hidden = false;
+  $("who").textContent = user.email + " 으로 로그인됨";
+  await loadConfig();
+});
+
+/* Firestore가 응답하지 않으면(데이터베이스 미생성 등) SDK가 계속 재시도하므로 시간 제한을 둔다 */
+function withTimeout(p, ms) {
+  return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error("timeout"), { code: "timeout" })), ms))]);
+}
 
 async function loadConfig() {
   setMsg($("save-msg"), "설정을 불러오는 중입니다…");
   try {
-    const snap = await getDoc(ref);
+    const snap = await withTimeout(getDoc(ref), 10000);
     const d = snap.exists() ? snap.data() : {};
     keyIn.value = d.apiKey || "";
     modelSel.value = S.models.some((m) => m.id === d.model) ? d.model : S.defaultModel;
@@ -173,6 +223,7 @@ function explain(e, base) {
   if (e && e.code === "permission-denied") return base + " Firestore 보안 규칙이 막았습니다. firestore.rules의 config/public 블록을 콘솔에 게시했는지 확인하세요.";
   if (e && (e.code === "failed-precondition" || e.code === "not-found" || /database .* does not exist/i.test(e.message || ""))) return base + " Firestore 데이터베이스가 아직 없습니다. Firebase 콘솔에서 Firestore Database를 만드세요.";
   if (e && e.code === "unavailable") return base + " 네트워크 연결을 확인하세요.";
+  if (e && e.code === "timeout") return base + " Firestore가 응답하지 않습니다. Firebase 콘솔에서 Firestore Database가 만들어져 있는지 확인하세요.";
   return base + " (" + ((e && (e.code || e.message)) || "알 수 없는 오류") + ")";
 }
 
@@ -210,13 +261,15 @@ $("test").addEventListener("click", async () => {
 });
 
 $("save").addEventListener("click", async () => {
+  const user = auth.currentUser;
+  if (!isAdmin(user)) return;
   const btn = $("save"); btn.disabled = true;
   setMsg($("save-msg"), "저장하는 중입니다…");
   const guidelines = guideIn.value.trim() === S.defaultGuidelines.trim() ? "" : guideIn.value.trim();
   try {
-    await setDoc(ref, { apiKey: keyIn.value.trim(), model: modelSel.value, guidelines, updatedAt: serverTimestamp() });
+    await withTimeout(setDoc(ref, { apiKey: keyIn.value.trim(), model: modelSel.value, guidelines, updatedAt: serverTimestamp(), updatedBy: user.email }), 15000);
     if (!guidelines) guideIn.value = S.defaultGuidelines;
-    showUpdated({ updatedAt: { toDate: () => new Date() } });
+    showUpdated({ updatedAt: { toDate: () => new Date() }, updatedBy: user.email });
     setMsg($("save-msg"), "저장했습니다. 방문자가 마음 서가를 새로 열면 바로 적용됩니다.", "ok");
   } catch (e) {
     setMsg($("save-msg"), explain(e, "저장하지 못했습니다."), "err");
