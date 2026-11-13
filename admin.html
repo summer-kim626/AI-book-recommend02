@@ -220,7 +220,7 @@ function showUpdated(d) {
 }
 
 function explain(e, base) {
-  if (e && e.code === "permission-denied") return base + " Firestore 보안 규칙이 막았습니다. firestore.rules의 config/public 블록을 콘솔에 게시했는지 확인하세요.";
+  if (e && e.code === "permission-denied") return base + " Firestore 보안 규칙이 막았습니다. 관리자 계정으로 로그인했는지, firestore.rules를 콘솔에 게시했는지 확인하세요.";
   if (e && (e.code === "failed-precondition" || e.code === "not-found" || /database .* does not exist/i.test(e.message || ""))) return base + " Firestore 데이터베이스가 아직 없습니다. Firebase 콘솔에서 Firestore Database를 만드세요.";
   if (e && e.code === "unavailable") return base + " 네트워크 연결을 확인하세요.";
   if (e && e.code === "timeout") return base + " Firestore가 응답하지 않습니다. Firebase 콘솔에서 Firestore Database가 만들어져 있는지 확인하세요.";
