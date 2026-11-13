@@ -9,13 +9,13 @@
 // 블록 맨 끝에 아래 match 블록 하나만 덧붙였다.
 // (isSignedIn(), incoming()은 기존 규칙에 정의된 함수)
 
-    // 마음 서가 관리자 설정 (AI-book-recommend02/admin.html). 방문자는 읽기, 관리자 구글 계정만 쓰기
+    // 마음 서가 관리자 설정 (AI-book-recommend02/admin.html). 방문자는 읽기.
+    // 임시: 관리자 로그인 없이 저장을 허용한다. 대신 저장 가능한 필드와 형식만 제한한다.
+    // 구글 로그인을 다시 붙이면 write 조건에 isSignedIn()과 관리자 이메일 확인을 되돌린다.
     match /config/public {
       allow read: if true;
-      allow write: if isSignedIn()
-        && request.auth.token.email == 'seungyeop2002@gmail.com'
-        && request.auth.token.email_verified == true
-        && incoming().keys().hasOnly(['apiKey', 'model', 'guidelines', 'updatedAt', 'updatedBy'])
-        && incoming().guidelines is string
-        && incoming().guidelines.size() < 20000;
+      allow write: if incoming().keys().hasOnly(['apiKey', 'model', 'guidelines', 'updatedAt'])
+        && incoming().apiKey is string && incoming().apiKey.size() < 200
+        && incoming().model is string && incoming().model.size() < 100
+        && incoming().guidelines is string && incoming().guidelines.size() < 20000;
     }
