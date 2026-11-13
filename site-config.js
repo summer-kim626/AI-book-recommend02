@@ -2,21 +2,22 @@
    여기 있는 값은 모두 공개되어도 되는 값이다. (Firebase 웹 설정은 브라우저에 원래 공개되는 값)
    관리자 권한은 이 파일이 아니라 Firestore 보안 규칙(firestore.rules)이 지킨다. */
 window.MS_SITE = {
+  /* 마음 서가 전용 Firebase 프로젝트 maeum-seoga (웹 앱: maeum-seoga-web, 2026-11-13 생성) */
   firebase: {
-    apiKey: "AIzaSyBHK0rp9Fh79SZ6r5Q8rMSfm4yB0xXkLq0",
-    authDomain: "gen-lang-client-0018774567.firebaseapp.com",
-    projectId: "gen-lang-client-0018774567",
-    storageBucket: "gen-lang-client-0018774567.firebasestorage.app",
-    messagingSenderId: "1055196604641",
-    appId: "1:1055196604641:web:929f2a036b18d1e11f2fa0"
+    apiKey: "AIzaSyDRHEiN0m9aTqIxvkK04F4HB1SJN-om-2k",
+    authDomain: "maeum-seoga.firebaseapp.com",
+    projectId: "maeum-seoga",
+    storageBucket: "maeum-seoga.firebasestorage.app",
+    messagingSenderId: "538647951707",
+    appId: "1:538647951707:web:a188cc1ec1171790d7827e"
   },
 
   /* 관리자 페이지에 들어갈 수 있는 구글 계정. firestore.rules의 이메일과 같아야 한다. */
   adminEmails: ["seungyeop2002@gmail.com"],
 
   /* 관리자 설정이 저장되는 Firestore 문서 (누구나 읽기, 관리자만 쓰기).
-     무료(Spark) 요금제에서는 데이터베이스를 새로 추가할 수 없어, AI Studio가 만든 기존 데이터베이스를 함께 쓴다. */
-  databaseId: "ai-studio-564b5a24-a847-43de-b09e-977eb51d15bd",
+     전용 프로젝트의 기본 데이터베이스를 쓴다. (데이터베이스 생성·규칙 게시는 3단계에서 진행) */
+  databaseId: "(default)",
   configDoc: "config/public",
 
   /* Gemini 무료 등급에서 실제 응답을 확인한 모델 (2026-11-13 기준) */
