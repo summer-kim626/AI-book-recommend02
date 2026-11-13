@@ -644,11 +644,59 @@ function buildPrompt(text, hits, pick) {
 }
 
 
+/* Gemini 구조화 출력: 응답 JSON의 모양을 고정해 깨진 JSON이 오는 일을 줄인다.
+   필드 이름은 SITE.fixedFormat(프롬프트의 형식 안내)·renderAI와 같아야 한다. */
+var RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    summary: { type: "STRING" },
+    slang: { type: "ARRAY", items: { type: "OBJECT", properties: {
+      term: { type: "STRING" }, meaning: { type: "STRING" },
+      emotions: { type: "ARRAY", items: { type: "STRING" } },
+      understood: { type: "BOOLEAN" },
+      alternatives: { type: "ARRAY", items: { type: "STRING" } }
+    }, required: ["term", "meaning", "emotions", "understood", "alternatives"] } },
+    emotions: { type: "ARRAY", items: { type: "OBJECT", properties: {
+      name: { type: "STRING" }, intensity: { type: "INTEGER" }
+    }, required: ["name", "intensity"] } },
+    need: { type: "STRING", enum: ["공감", "해결", "이해"] },
+    crisis: { type: "BOOLEAN" },
+    books: { type: "ARRAY", items: { type: "OBJECT", properties: {
+      title: { type: "STRING" }, author: { type: "STRING" }, genre: { type: "STRING" }, why: { type: "STRING" }
+    }, required: ["title", "author", "genre", "why"] } }
+  },
+  required: ["summary", "slang", "emotions", "need", "crisis", "books"]
+};
+
+/* 깨진 JSON을 한 번 더 살려 본다: 코드 블록 표시와 ] } 앞의 남는 쉼표를 지운다 */
+function parseJsonLoose(t) {
+  var m = /\{[\s\S]*\}/.exec(t || "");
+  if (!m) return null;
+  try { return JSON.parse(m[0]); } catch (e) {}
+  try { return JSON.parse(m[0].replace(/,\s*([\]}])/g, "$1")); } catch (e2) { return null; }
+}
+
+/* 일시적인 실패(깨진 응답, 서버 혼잡, 순간 네트워크 오류)는 잠깐 뒤 한 번 더 시도한다.
+   키·모델 오류, 요청 한도, 시간 초과는 다시 해도 같으므로 바로 알린다. */
+var RETRYABLE = { parse: true, overloaded: true, network: true, upstream: true };
+
 async function askAI(text, pick) {
   await configReady;
   var key = currentKey();
   if (!key) { var e0 = new Error("nokey"); e0.code = "no_key"; throw e0; }
   var model = currentModel();
+  var prompt = buildPrompt(text, detectSlang(text), pick);
+  try {
+    return await askOnce(key, model, prompt);
+  } catch (e) {
+    if (!RETRYABLE[e.code]) throw e;
+    setStatus("응답이 고르지 않아 한 번 더 요청하는 중입니다…");
+    await new Promise(function (r) { setTimeout(r, 1500); });
+    return await askOnce(key, model, prompt);
+  }
+}
+
+async function askOnce(key, model, prompt) {
   var res;
   var ac = new AbortController();
   var timer = setTimeout(function () { ac.abort(); }, TIMEOUT_MS);
@@ -662,8 +710,8 @@ async function askAI(text, pick) {
         "x-goog-api-key": key
       },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: buildPrompt(text, detectSlang(text), pick) }] }],
-        generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192 }
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: "application/json", responseSchema: RESPONSE_SCHEMA, maxOutputTokens: 8192 }
       })
     });
   } catch (e1) { throw fail("network"); }
@@ -679,9 +727,9 @@ async function askAI(text, pick) {
   clearTimeout(timer);
   var parts = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || [];
   var t = parts.filter(function (p) { return !p.thought; }).map(function (p) { return p.text || ""; }).join("");
-  var m = /\{[\s\S]*\}/.exec(t);
-  if (!m) { var ep = new Error("parse"); ep.code = "parse"; throw ep; }
-  return JSON.parse(m[0]);
+  var data = parseJsonLoose(t);
+  if (!data) { var ep = new Error("parse"); ep.code = "parse"; throw ep; }
+  return data;
 }
 
 /* AI가 돌려준 은어 목록에, 사전에서 찾았는데 빠진 것을 보충한다 */
@@ -837,10 +885,19 @@ async function runAI(raw, pick) {
       timeout: "응답이 너무 오래 걸려 요청을 멈췄습니다. 'AI 설정'에서 더 빠른 모델을 골라 다시 시도해 주세요.",
       rate_limited: "요청이 많습니다. 잠시 뒤 다시 시도해 주세요.",
       overloaded: "AI 서버가 바쁩니다. 잠시 뒤 다시 시도해 주세요.",
+      parse: "AI 응답이 고르지 않아 두 번 시도했지만 읽지 못했습니다. 잠시 뒤 다시 시도해 주세요.",
+      upstream: "AI 요청이 거절되었습니다. 잠시 뒤 다시 시도해 주세요.",
       network: UNAVAILABLE
     };
-    setStatus(msgs[code] || "AI 응답을 처리하지 못했습니다. 다시 시도해 주세요.");
-    if (code === "no_key" || code === "bad_key" || code === "bad_model" || code === "timeout") { cfgBox.open = true; }
+    /* 관리자 키를 쓰는 중이면 방문자에게는 'AI 설정'이 없으므로, 설정을 바꾸라는 대신 관리자 문의로 안내한다 */
+    var adminManaged = !!ADMIN.apiKey && !EMBEDDED_KEY;
+    if (adminManaged && (code === "bad_key" || code === "bad_model" || code === "timeout")) {
+      msgs[code] = code === "timeout"
+        ? "응답이 너무 오래 걸려 요청을 멈췄습니다. 잠시 뒤 다시 시도해 주세요."
+        : "AI 설정에 문제가 있어 추천할 수 없습니다. 관리자에게 알려 주세요.";
+    }
+    setStatus(msgs[code] || "AI 응답을 처리하지 못했습니다. 잠시 뒤 다시 시도해 주세요.");
+    if (!adminManaged && (code === "no_key" || code === "bad_key" || code === "bad_model" || code === "timeout")) { cfgBox.open = true; }
   } finally {
     aiBtn.disabled = false;
   }
