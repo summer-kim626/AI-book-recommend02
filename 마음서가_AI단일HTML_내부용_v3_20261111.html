@@ -158,15 +158,15 @@ textarea { width: 100%; font: inherit; font-size: 16px; color: var(--ink); backg
     <details class="cfg" id="cfg">
       <summary id="cfg-sum">AI 설정 (API 키)</summary>
       <div class="row">
-        <label for="k-key">Anthropic API 키</label>
-        <input type="password" id="k-key" autocomplete="off" spellcheck="false" placeholder="sk-ant-...">
+        <label for="k-key">Gemini API 키 (<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">무료 발급</a>)</label>
+        <input type="password" id="k-key" autocomplete="off" spellcheck="false" placeholder="AIza...">
       </div>
       <div class="row">
         <label for="k-model">모델 이름</label>
         <input type="text" id="k-model" autocomplete="off" spellcheck="false">
       </div>
       <label class="chk"><input type="checkbox" id="k-save"> 이 브라우저에 키 저장 (공용 컴퓨터에서는 끄세요)</label>
-      <p class="warn">키는 이 페이지를 연 브라우저에서 Anthropic으로 직접 전송됩니다. 다른 서버로 보내지 않습니다. 키가 코드에 들어가 있는 파일은 공개하지 마세요.</p>
+      <p class="warn">키는 이 페이지를 연 브라우저에서 Google Gemini API로 직접 전송됩니다. 다른 서버로 보내지 않습니다. 키가 코드에 들어가 있는 파일은 공개하지 마세요.</p>
     </details>
 
     <div class="step">
@@ -484,8 +484,12 @@ var aiIn = document.getElementById("q2");
    방법 B: EMBEDDED_KEY에 키를 넣어 배포한다. 방문자는 키 입력 없이 쓰지만,
            페이지 소스를 보면 누구나 키를 볼 수 있다. 개인 확인용 파일로만 쓰고 공개하지 않는다. */
 var EMBEDDED_KEY = "";
-var DEFAULT_MODEL = "claude-sonnet-5-5";
-var API_URL = "https://api.anthropic.com/v1/messages";
+/* Gemini API 무료 등급에서 쓸 수 있는 Flash 모델. 무료 키는 https://aistudio.google.com/apikey 에서 발급 */
+var DEFAULT_MODEL = "gemini-3.8-flash";
+var API_BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
+/* 저장 키 이름을 바꿔, 예전에 저장된 Anthropic 키·모델 이름이 섞이지 않게 한다 */
+var KEY_STORE = "ms_gemini_key";
+var MODEL_STORE = "ms_gemini_model";
 
 var kKey = document.getElementById("k-key");
 var kModel = document.getElementById("k-model");
@@ -496,17 +500,17 @@ var cfgSum = document.getElementById("cfg-sum");
 function store(op, k, v) {
   try { return op === "get" ? localStorage.getItem(k) : op === "set" ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch (e) { return null; }
 }
-kModel.value = store("get", "ms_model") || DEFAULT_MODEL;
+kModel.value = store("get", MODEL_STORE) || DEFAULT_MODEL;
 (function () {
-  var saved = store("get", "ms_key");
+  var saved = store("get", KEY_STORE);
   if (saved) { kKey.value = saved; kSave.checked = true; }
   if (EMBEDDED_KEY) cfgBox.hidden = true;
   else if (!kKey.value) cfgBox.open = true;
 })();
 function currentKey() { return EMBEDDED_KEY || kKey.value.trim(); }
 function persist() {
-  store("set", "ms_model", kModel.value.trim() || DEFAULT_MODEL);
-  if (kSave.checked && kKey.value.trim()) store("set", "ms_key", kKey.value.trim()); else store("del", "ms_key");
+  store("set", MODEL_STORE, kModel.value.trim() || DEFAULT_MODEL);
+  if (kSave.checked && kKey.value.trim()) store("set", KEY_STORE, kKey.value.trim()); else store("del", KEY_STORE);
 }
 [kKey, kModel, kSave].forEach(function (n) { n.addEventListener("change", persist); });
 
@@ -584,24 +588,30 @@ async function askAI(text, pick) {
   var model = (kModel.value.trim() || DEFAULT_MODEL);
   var res;
   try {
-    res = await fetch(API_URL, {
+    res = await fetch(API_BASE + encodeURIComponent(model) + ":generateContent", {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
+        "x-goog-api-key": key
       },
-      body: JSON.stringify({ model: model, max_tokens: 1800, messages: [{ role: "user", content: buildPrompt(text, detectSlang(text), pick) }] })
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: buildPrompt(text, detectSlang(text), pick) }] }],
+        generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192 }
+      })
     });
   } catch (e1) { var en = new Error("net"); en.code = "network"; throw en; }
   if (!res.ok) {
+    var body = "";
+    try { body = await res.text(); } catch (e3) {}
     var er = new Error("api");
-    er.code = res.status === 401 || res.status === 403 ? "bad_key" : res.status === 404 ? "bad_model" : res.status === 429 ? "rate_limited" : res.status === 529 || res.status >= 500 ? "overloaded" : "upstream";
+    /* Gemini는 잘못된 키에 400(API_KEY_INVALID)을 돌려준다 */
+    var badKey = res.status === 401 || res.status === 403 || (res.status === 400 && /API_KEY_INVALID|API key not valid/i.test(body));
+    er.code = badKey ? "bad_key" : res.status === 404 ? "bad_model" : res.status === 429 ? "rate_limited" : res.status >= 500 ? "overloaded" : "upstream";
     throw er;
   }
   var j = await res.json();
-  var t = (j.content || []).map(function (c) { return c.text || ""; }).join("");
+  var parts = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || [];
+  var t = parts.filter(function (p) { return !p.thought; }).map(function (p) { return p.text || ""; }).join("");
   var m = /\{[\s\S]*\}/.exec(t);
   if (!m) { var ep = new Error("parse"); ep.code = "parse"; throw ep; }
   return JSON.parse(m[0]);
@@ -671,7 +681,7 @@ function renderAI(data, text, hits, pick) {
   books = books.slice(0, 3);
   var slang = normalizeSlang(data.slang, hits);
   var box = el("div", "result");
-  box.appendChild(el("h2", null, "Claude의 해석"));
+  box.appendChild(el("h2", null, "AI의 해석"));
 
   if (slang.length) box.appendChild(slangSection(slang, false));
 
@@ -726,7 +736,7 @@ async function runAI(raw, pick) {
   if (!text || aiBtn.disabled) return;
   var hits = detectSlang(text);
   aiBtn.disabled = true;
-  setStatus("Claude가 은어와 원문을 해석하는 중입니다…");
+  setStatus("AI가 은어와 원문을 해석하는 중입니다…");
   aiOut.textContent = "";
   if (hits.length) {
     var pre = el("div", "result");
