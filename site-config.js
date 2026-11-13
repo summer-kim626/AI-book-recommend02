@@ -2,14 +2,14 @@
    여기 있는 값은 모두 공개되어도 되는 값이다. (Firebase 웹 설정은 브라우저에 원래 공개되는 값)
    관리자 권한은 이 파일이 아니라 Firestore 보안 규칙(firestore.rules)이 지킨다. */
 window.MS_SITE = {
-  /* 마음 서가 전용 Firebase 프로젝트 maeum-seoga (웹 앱: maeum-seoga-web, 2026-11-13 생성) */
+  /* 마음 서가 Firebase 프로젝트 aipm-emotion-book-store (2026-11-13 maeum-seoga에서 옮김) */
   firebase: {
-    apiKey: "AIzaSyDRHEiN0m9aTqIxvkK04F4HB1SJN-om-2k",
-    authDomain: "maeum-seoga.firebaseapp.com",
-    projectId: "maeum-seoga",
-    storageBucket: "maeum-seoga.firebasestorage.app",
-    messagingSenderId: "538647951707",
-    appId: "1:538647951707:web:a188cc1ec1171790d7827e"
+    apiKey: "AIzaSyA7FRJ7yIgCri3bHLDEFPKXu7tgM-mxPv0",
+    authDomain: "aipm-emotion-book-store.firebaseapp.com",
+    projectId: "aipm-emotion-book-store",
+    storageBucket: "aipm-emotion-book-store.firebasestorage.app",
+    messagingSenderId: "749396532721",
+    appId: "1:749396532721:web:3b01d8ed549c273ea93850"
   },
 
   /* 관리자 페이지에 들어갈 수 있는 구글 계정. firestore.rules의 이메일과 같아야 한다. */

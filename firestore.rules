@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // 마음 서가 Firestore 보안 규칙
-// 적용 위치: Firebase 프로젝트 maeum-seoga → Firestore Database (default) → 규칙
+// 적용 위치: Firebase 프로젝트 aipm-emotion-book-store → Firestore Database (default) → 규칙
 // 이 파일을 고치면 콘솔의 규칙 탭에 그대로 붙여넣고 게시한다.
 service cloud.firestore {
   match /databases/{database}/documents {
