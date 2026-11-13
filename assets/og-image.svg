@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <!-- 공유 썸네일 원본. 수정 후 다시 렌더링:
+       rsvg-convert -w 1200 -h 630 assets/og-image.svg -o assets/og-image.png
+       글꼴: 제목 AppleMyungjo(명조), 본문 Pretendard. 다른 컴퓨터에서는 대체 글꼴로 그려질 수 있다. -->
+  <rect width="1200" height="630" fill="#f3f5f7"/>
+  <circle cx="930" cy="330" r="250" fill="#e1f0f1"/>
+
+  <!-- 왼쪽 글 -->
+  <g font-family="Pretendard, 'Apple SD Gothic Neo', sans-serif">
+    <rect x="90" y="96" width="268" height="48" rx="24" fill="none" stroke="#1f6f78" stroke-width="2"/>
+    <text x="224" y="128" text-anchor="middle" font-size="22" font-weight="700" fill="#1f6f78">AI 감정 독서 큐레이션</text>
+
+    <text x="86" y="282" font-family="AppleMyungjo, 'Noto Serif KR', serif" font-size="124" fill="#1d2733">마음 서가</text>
+
+    <text x="90" y="356" font-size="34" fill="#5d6b7a">지금 감정을 고르거나 적으면</text>
+    <text x="90" y="404" font-size="34" fill="#5d6b7a">어울리는 책 3권을 추천해 드려요</text>
+
+    <g font-size="24" font-weight="700" fill="#1f6f78">
+      <rect x="90" y="452" width="92" height="46" rx="23" fill="#ffffff" stroke="#d9e0e7" stroke-width="2"/>
+      <text x="136" y="483" text-anchor="middle">불안</text>
+      <rect x="196" y="452" width="116" height="46" rx="23" fill="#ffffff" stroke="#d9e0e7" stroke-width="2"/>
+      <text x="254" y="483" text-anchor="middle">외로움</text>
+      <rect x="326" y="452" width="92" height="46" rx="23" fill="#ffffff" stroke="#d9e0e7" stroke-width="2"/>
+      <text x="372" y="483" text-anchor="middle">설렘</text>
+      <rect x="432" y="452" width="116" height="46" rx="23" fill="#ffffff" stroke="#d9e0e7" stroke-width="2"/>
+      <text x="490" y="483" text-anchor="middle">번아웃</text>
+    </g>
+
+    <text x="90" y="566" font-size="22" fill="#8a97a5">summer-kim626.github.io/AI-book-recommend02</text>
+  </g>
+
+  <!-- 오른쪽 책 세 권 -->
+  <g font-family="AppleMyungjo, 'Noto Serif KR', serif" fill="#ffffff">
+    <g transform="rotate(-8 790 420)">
+      <rect x="720" y="200" width="150" height="230" rx="8" fill="#2e5e4e"/>
+      <rect x="720" y="200" width="12" height="230" rx="4" fill="#ffffff" opacity="0.18"/>
+      <text x="748" y="246" font-size="28">불안</text>
+      <rect x="748" y="394" width="70" height="4" fill="#ffffff" opacity="0.5"/>
+    </g>
+    <g transform="rotate(6 1080 430)">
+      <rect x="990" y="210" width="150" height="230" rx="8" fill="#c9774f"/>
+      <rect x="990" y="210" width="12" height="230" rx="4" fill="#ffffff" opacity="0.18"/>
+      <text x="1018" y="256" font-size="28">설렘</text>
+      <rect x="1018" y="404" width="70" height="4" fill="#ffffff" opacity="0.5"/>
+    </g>
+    <g>
+      <rect x="845" y="160" width="170" height="260" rx="8" fill="#1f6f78"/>
+      <rect x="845" y="160" width="14" height="260" rx="4" fill="#ffffff" opacity="0.18"/>
+      <text x="876" y="212" font-size="32">위로</text>
+      <path d="M930 330c-4.2-3.2-13.5-9.7-13.5-17.3 0-4.4 3.4-7.8 7.4-7.8 2.7 0 4.9 1.3 6.1 3.4 1.2-2.1 3.4-3.4 6.1-3.4 4 0 7.4 3.4 7.4 7.8 0 7.6-9.3 14.1-13.5 17.3z" fill="#e0675b"/>
+      <rect x="876" y="384" width="80" height="4" fill="#ffffff" opacity="0.5"/>
+    </g>
+    <rect x="690" y="452" width="480" height="10" rx="5" fill="#1d2733" opacity="0.08"/>
+  </g>
+</svg>
