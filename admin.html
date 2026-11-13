@@ -145,7 +145,7 @@ import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.
 const S = window.MS_SITE;
 const app = initializeApp(S.firebase);
 const auth = getAuth(app);
-const db = getFirestore(app);
+const db = S.databaseId ? getFirestore(app, S.databaseId) : getFirestore(app);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: "select_account" });
 const [col, id] = S.configDoc.split("/");

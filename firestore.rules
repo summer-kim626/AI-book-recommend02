@@ -1,21 +1,21 @@
-rules_version = '2';
+// 마음 서가 관리자 설정 규칙 (참고용 사본)
+//
+// 적용 위치: Firebase 프로젝트 gen-lang-client-0018774567
+//           → Firestore → 데이터베이스 ai-studio-564b5a24-a847-43de-b09e-977eb51d15bd → 규칙
+//
+// 이 데이터베이스는 다른 앱(행사 신청서: applications, admins, settings)과 함께 쓴다.
+// 그래서 전체 규칙을 바꾸지 않고, 기존 규칙의
+//   match /databases/{database}/documents { ... }
+// 블록 맨 끝에 아래 match 블록 하나만 덧붙였다.
+// (isSignedIn(), incoming()은 기존 규칙에 정의된 함수)
 
-// 마음 서가 관리자 설정 규칙
-// Firebase 콘솔 → Firestore Database → 규칙(Rules)에 붙여넣고 게시(Publish)한다.
-// 이미 다른 컬렉션 규칙이 있다면 match /config/public 블록만 합친다.
-service cloud.firestore {
-  match /databases/{database}/documents {
+    // 마음 서가 관리자 설정 (AI-book-recommend02/admin.html). 방문자는 읽기, 관리자 구글 계정만 쓰기
     match /config/public {
-      // 메인 페이지 방문자는 누구나 설정을 읽는다 (API 키 포함 — 키에 웹사이트 제한을 걸어 둘 것)
       allow read: if true;
-
-      // 관리자 구글 계정만 저장할 수 있다. site-config.js의 adminEmails와 같아야 한다.
-      allow write: if request.auth != null
-        && request.auth.token.email == "seungyeop2002@gmail.com"
+      allow write: if isSignedIn()
+        && request.auth.token.email == 'seungyeop2002@gmail.com'
         && request.auth.token.email_verified == true
-        && request.resource.data.keys().hasOnly(["apiKey", "model", "guidelines", "updatedAt", "updatedBy"])
-        && request.resource.data.guidelines is string
-        && request.resource.data.guidelines.size() < 20000;
+        && incoming().keys().hasOnly(['apiKey', 'model', 'guidelines', 'updatedAt', 'updatedBy'])
+        && incoming().guidelines is string
+        && incoming().guidelines.size() < 20000;
     }
-  }
-}

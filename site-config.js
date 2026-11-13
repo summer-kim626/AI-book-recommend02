@@ -14,7 +14,9 @@ window.MS_SITE = {
   /* 관리자 페이지에 들어갈 수 있는 구글 계정. firestore.rules의 이메일과 같아야 한다. */
   adminEmails: ["seungyeop2002@gmail.com"],
 
-  /* 관리자 설정이 저장되는 Firestore 문서 (누구나 읽기, 관리자만 쓰기) */
+  /* 관리자 설정이 저장되는 Firestore 문서 (누구나 읽기, 관리자만 쓰기).
+     무료(Spark) 요금제에서는 데이터베이스를 새로 추가할 수 없어, AI Studio가 만든 기존 데이터베이스를 함께 쓴다. */
+  databaseId: "ai-studio-564b5a24-a847-43de-b09e-977eb51d15bd",
   configDoc: "config/public",
 
   /* Gemini 무료 등급에서 실제 응답을 확인한 모델 (2026-11-13 기준) */
@@ -47,7 +49,7 @@ window.MS_SITE = {
 window.MS_loadConfig = function (timeoutMs) {
   var s = window.MS_SITE;
   var url = "https://firestore.googleapis.com/v1/projects/" + s.firebase.projectId +
-    "/databases/(default)/documents/" + s.configDoc + "?key=" + s.firebase.apiKey;
+    "/databases/" + encodeURIComponent(s.databaseId || "(default)") + "/documents/" + s.configDoc + "?key=" + s.firebase.apiKey;
   var ac = new AbortController();
   var timer = setTimeout(function () { ac.abort(); }, timeoutMs || 8000);
   return fetch(url, { signal: ac.signal, cache: "no-store" })
